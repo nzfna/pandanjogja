@@ -34,14 +34,35 @@ function RoomCard({ r, st, wide }) {
 }
 
 export default async function Home() {
+  const site = process.env.NEXT_PUBLIC_SITE_URL || 'https://pandanjogja.vercel.app';
+  const wa = process.env.NEXT_PUBLIC_OWNER_WA || '';
   const [rooms, occ] = await Promise.all([getRooms(), getPublicOcc()]);
   const t = todayWIB();
   const items = rooms.map((r) => ({ r, st: computeStatus(r.code, occ, t) }));
   const groups = [...new Set(rooms.map((r) => r.building))];
   const address = process.env.NEXT_PUBLIC_ADDRESS;
+  // Data terstruktur bisnis untuk Google & AI: siapa, di mana, apa yang disewakan.
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'LodgingBusiness',
+    name: 'Pandan Jogja',
+    description: 'Homestay, villa, dan kos di Yogyakarta: 7 kamar berperabot lengkap, sewa harian, mingguan, dan bulanan.',
+    url: site,
+    image: `${site}/og.jpg`,
+    priceRange: 'IDR 150000 - 1500000',
+    ...(address ? { address: { '@type': 'PostalAddress', streetAddress: address, addressLocality: 'Yogyakarta', addressRegion: 'DI Yogyakarta', addressCountry: 'ID' } } : {}),
+    ...(wa ? { telephone: `+${String(wa).replace(/\D/g, '')}` } : {}),
+    makesOffer: rooms.map((r) => ({
+      '@type': 'Offer',
+      url: `${site}/kamar/${r.code}`,
+      itemOffered: { '@type': 'Accommodation', name: `${r.name} Pandan Jogja` },
+      ...(r.price_monthly ? { price: r.price_monthly, priceCurrency: 'IDR' } : {}),
+    })),
+  };
 
   return (
     <main className="mx-auto max-w-5xl px-5">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <section className="pt-6 sm:pt-8">
         <h1 className="flex items-start gap-2 text-2xl font-extrabold leading-tight sm:text-4xl">
           <span>Pilih pintu kamarmu,<br />lalu lihat detailnya.</span>
