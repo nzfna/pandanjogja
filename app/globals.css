@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body { background: #FAFAF5; color: #173A1F; font-family: 'Nunito', system-ui, sans-serif; }
+h1, h2, h3, .font-display { font-family: 'Nunito', system-ui, sans-serif; letter-spacing: -0.01em; }
+
+@layer components {
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-full bg-pandan-700 px-5 py-2.5 font-bold text-white shadow-sm transition hover:bg-pandan-900 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-kelinci-500; }
+  .btn-soft { @apply inline-flex items-center justify-center gap-2 rounded-full border border-pandan-200 bg-white px-4 py-2 font-semibold transition hover:bg-pandan-50 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-kelinci-500; }
+  .input { @apply w-full rounded-xl border border-pandan-200 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pandan-500; }
+  .card { @apply rounded-3xl border border-pandan-100 bg-white p-5 shadow-card; }
+  .badge { @apply inline-block rounded-full px-3 py-1 text-xs font-bold; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .door-in { animation: doorIn .7s cubic-bezier(.2,.8,.2,1) both; transform-origin: bottom; }
+  @keyframes doorIn { from { opacity: 0; transform: scaleY(.6); } }
+}
