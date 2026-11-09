@@ -1,5 +1,6 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { Mic, Send, X } from 'lucide-react';
 import { computeStatus, fmtDate } from '@/lib/avail';
 
@@ -10,12 +11,17 @@ const peopleOf = (s) => (/sendiri|solo/.test(s) ? 1 : /berdua/.test(s) ? 2 : /be
 
 export default function Chatbot({ rooms, occ, today, wa }) {
   const [open, setOpen] = useState(false);
-  const [msgs, setMsgs] = useState([{ bot: 1, t: 'Hai! Aku kelinci penjaga Pandan Jogja. Mau dibantu apa?', chips: SUG }]);
+  const [msgs, setMsgs] = useState([{ bot: 1, t: 'Hai! Aku Tera-Asisten Ai 🐰 Asisten AI Pandan Jogja. Tanya apa aja soal kamar, harga, fasilitas, atau cara booking — semuanya kujawab dari data terbaru di database. Mau dibantu apa?', chips: SUG }]);
   const [input, setInput] = useState('');
   const [rec, setRec] = useState(false);
+  const [busy, setBusy] = useState(false);
   const flow = useRef({});
+  const history = useRef(''); // token HMAC dari server, bukan riwayat mentah
   const end = useRef(null);
-  useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [msgs, open]);
+  const pathname = usePathname();
+  // Kalau sedang di /kamar/A, pertanyaan "kamar ini" diarahkan ke kamar A.
+  const roomNow = (pathname?.match(/^\/kamar\/([a-g])(?:\/|$)/i) || [])[1]?.toUpperCase() || null;
+  useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [msgs, open, busy]);
 
   const say = (m) => setMsgs((p) => [...p.map((x) => ({ ...x, chips: null })), { bot: 1, ...m }]);
   const status = (r) => computeStatus(r.code, occ, today);
@@ -35,11 +41,19 @@ export default function Chatbot({ rooms, occ, today, wa }) {
 
   function handle(text) {
     const s = text.trim().toLowerCase();
-    if (!s) return;
+    if (!s || busy) return;
     setMsgs((p) => [...p.map((x) => ({ ...x, chips: null })), { t: text }]);
     setInput('');
     const f = flow.current;
-    const intent = /rekomendasi|cocok|kriteria/.test(s) ? 'rec' : /cara|booking|pesan|order/.test(s) ? 'how' : /waiting|tunggu|antri/.test(s) ? 'wait' : null;
+    // Jangan bajak pertanyaan yang menyebut kamar/fasilitas/harga hanya karena
+    // kebetulan mengandung kata "booking". Pertanyaan campuran seperti
+    // "fasilitas kamar A kalau aku booking" harus dijawab AI dari data kamar.
+    const aboutRoom = /\b[a-g]\b/.test(s) || /fasilitas|harga|biaya|tarif|kapasitas|kasur|dapur|teras|kamar mandi|mesin cuci/.test(s);
+    const howTo = /cara|gimana|bagaimana|langkah|prosedur/.test(s) && /booking|pesan|sewa|survei|order/.test(s);
+    const intent = /rekomendasi|cocok|kriteria/.test(s) ? 'rec'
+      : /waiting|tunggu|antri/.test(s) ? 'wait'
+      : howTo && !aboutRoom ? 'how'
+      : null;
     if (!intent && f.step === 'people') {
       const n = peopleOf(s);
       if (!n) return say({ t: 'Berapa orang yang akan menginap? (contoh: 2)' });
@@ -65,12 +79,30 @@ export default function Chatbot({ rooms, occ, today, wa }) {
     if (intent === 'how') return say({ t: 'Langkah memesan kamar:\n1. Pilih pintu kamar yang tersedia\n2. Lihat video preview kamar\n3. Pilih rentang sewa (150 rb harian, 600 rb mingguan, 1,5 jt bulanan)\n4. Pilih tanggal survei\n5. Klik "Kirim pesan ke WhatsApp" dan tunggu pemilik menjawab', chips: [SUG[0], SUG[2]] });
     if (intent === 'wait') {
       flow.current = { step: 'wait' };
-      const busy = rooms.filter((r) => status(r).state === 'terisi').map((r) => r.code);
-      return say({ t: busy.length ? 'Kamar mana yang kamu tunggu?' : 'Semua kamar sedang tersedia, tidak ada waiting list saat ini.', chips: busy.length ? busy : SUG });
+      const penuh = rooms.filter((r) => status(r).state === 'terisi').map((r) => r.code);
+      return say({ t: penuh.length ? 'Kamar mana yang kamu tunggu?' : 'Semua kamar sedang tersedia, tidak ada waiting list saat ini.', chips: penuh.length ? penuh : SUG });
     }
-    say({ t: 'Aku bisa bantu hal berikut:', chips: SUG });
+    askAI(text);
   }
 
+  // Pertanyaan bebas -> AI dengan konteks database. Kalau AI gagal/offline,
+  // tetap jawab dari data kamar & okupansi yang sudah dibawa props.
+  async function askAI(text) {
+    setBusy(true);
+    try {
+      const r = await fetch('/api/ask', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text, history: history.current, room: roomNow }),
+      });
+      const d = await r.json();
+      if (d.history) history.current = d.history;
+      say({ t: d.text || 'Maaf, aku gagal menjawab ini. Coba lagi ya 🐰', chips: SUG });
+    } catch {
+      const free = rooms.filter((x) => status(x).state === 'tersedia').map((x) => x.code);
+      say({ t: `Koneksiku ke otak AI sedang putus 🐰 Tapi dari data database lokal:\n• Kamar tersedia: ${free.length ? free.join(', ') : 'belum ada saat ini'}\n• Harga: harian 150 rb, mingguan 600 rb, bulanan 1,5 jt\n\nCoba kirim ulang pertanyaanmu nanti, atau chat pemilik langsung: https://wa.me/${wa}`, chips: SUG });
+    } finally { setBusy(false); }
+  }
   function listen() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return say({ t: 'Browser ini belum mendukung suara. Coba ketik ya.' });
@@ -83,15 +115,15 @@ export default function Chatbot({ rooms, occ, today, wa }) {
   return (
     <>
       {!open && (
-        <button onClick={() => setOpen(true)} aria-label="Buka chat" className="fixed bottom-4 right-4 z-40 h-20 w-20 overflow-hidden rounded-full bg-white shadow-lg ring-4 ring-pandan-300 transition hover:scale-105">
+        <button onClick={() => setOpen(true)} aria-label="Buka chat Tera-Asisten Ai" className="fixed bottom-4 right-4 z-40 h-20 w-20 overflow-hidden rounded-full bg-white shadow-lg ring-4 ring-pandan-300 transition hover:scale-105">
           <img src="/kelinci.png" alt="" className="h-full w-full object-cover" />
         </button>
       )}
       {open && (
-        <section className="fixed inset-x-3 bottom-3 z-50 flex h-[min(78vh,560px)] flex-col overflow-hidden rounded-3xl border border-pandan-200 bg-white shadow-2xl sm:inset-x-auto sm:right-4 sm:w-[380px]" aria-label="Chat Pandan Jogja">
+        <section className="fixed inset-x-3 bottom-3 z-50 flex h-[min(78vh,560px)] flex-col overflow-hidden rounded-3xl border border-pandan-200 bg-white shadow-2xl sm:inset-x-auto sm:right-4 sm:w-[380px]" aria-label="Chat Tera-Asisten Ai">
           <header className="flex items-center gap-3 bg-pandan-100 px-4 py-3">
             <img src="/kelinci.png" alt="" className="h-10 w-10 rounded-full object-cover" />
-            <p className="flex-1 font-display font-bold">Kelinci Pandan</p>
+            <p className="flex-1 font-display font-bold">Tera-Asisten Ai</p>
             <button onClick={() => setOpen(false)} aria-label="Tutup chat"><X size={20} /></button>
           </header>
           <div className="flex-1 space-y-3 overflow-y-auto p-4">
@@ -102,12 +134,13 @@ export default function Chatbot({ rooms, occ, today, wa }) {
                 {m.chips && <div className="mt-2 flex flex-wrap gap-2">{m.chips.map((c) => <button key={c} onClick={() => handle(c)} className="rounded-full border border-kelinci-500 px-3 py-1 text-left text-xs text-kelinci-700 hover:bg-kelinci-100">{c}</button>)}</div>}
               </div>
             ))}
+            {busy && <p className="inline-block rounded-2xl bg-pandan-50 px-3.5 py-2 text-sm text-pandan-700 animate-pulse">Tera sedang cek database… 🐰</p>}
             <div ref={end} />
           </div>
           <form onSubmit={(e) => { e.preventDefault(); handle(input); }} className="flex items-center gap-2 border-t border-pandan-200 p-3">
-            <input className="input" value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ketik pesan…" />
-            <button type="button" onClick={listen} aria-label="Bicara" className={`rounded-full p-2.5 ${rec ? 'bg-kelinci-500 text-white' : 'bg-pandan-100'}`}><Mic size={18} /></button>
-            <button aria-label="Kirim" className="rounded-full bg-pandan-700 p-2.5 text-white"><Send size={18} /></button>
+            <input className="input" value={input} onChange={(e) => setInput(e.target.value)} placeholder={busy ? 'Tera sedang menjawab…' : 'Ketik pesan…'} disabled={busy} />
+            <button type="button" onClick={listen} aria-label="Bicara" disabled={busy} className={`rounded-full p-2.5 ${rec ? 'bg-kelinci-500 text-white' : 'bg-pandan-100'}`}><Mic size={18} /></button>
+            <button aria-label="Kirim" disabled={busy} className="rounded-full bg-pandan-700 p-2.5 text-white disabled:opacity-50"><Send size={18} /></button>
           </form>
         </section>
       )}

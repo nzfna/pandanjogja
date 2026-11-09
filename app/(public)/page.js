@@ -1,7 +1,9 @@
 import Link from 'next/link';
+import { headers } from 'next/headers';
 import { Home as HomeIcon, ChevronRight, CalendarDays, MapPin } from 'lucide-react';
 import { getRooms, getPublicOcc } from '@/lib/data';
 import { computeStatus, todayWIB, rp, fmtShort } from '@/lib/avail';
+import { jsonLdHtml } from '@/lib/sanitize';
 import { TYPE_PILL } from '@/lib/ui';
 import RoomPhoto from '@/components/RoomPhoto';
 import SectionHead from '@/components/SectionHead';
@@ -34,6 +36,7 @@ function RoomCard({ r, st, wide }) {
 }
 
 export default async function Home() {
+  const nonce = (await headers()).get('x-nonce') || undefined;
   const site = process.env.NEXT_PUBLIC_SITE_URL || 'https://pandanjogja.vercel.app';
   const wa = process.env.NEXT_PUBLIC_OWNER_WA || '';
   const [rooms, occ] = await Promise.all([getRooms(), getPublicOcc()]);
@@ -62,7 +65,7 @@ export default async function Home() {
 
   return (
     <main className="mx-auto max-w-5xl px-5">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" nonce={nonce} dangerouslySetInnerHTML={{ __html: jsonLdHtml(jsonLd) }} />
       <section className="pt-6 sm:pt-8">
         <h1 className="flex items-start gap-2 text-2xl font-extrabold leading-tight sm:text-4xl">
           <span>Pilih pintu kamarmu,<br />lalu lihat detailnya.</span>

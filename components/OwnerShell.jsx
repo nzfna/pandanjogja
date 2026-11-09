@@ -24,7 +24,7 @@ export default function OwnerShell({ rooms, dateLabel, children }) {
       <div className="mx-auto max-w-7xl px-5 pb-40 pt-6">{children}</div>
       <div className="fixed bottom-4 right-4 z-40 flex flex-col items-center gap-3">
         <button onClick={() => setModal({})} aria-label="Tambah penyewa" className="flex h-14 w-14 items-center justify-center rounded-full bg-pandan-700 text-white shadow-lg hover:bg-pandan-900"><Plus /></button>
-        <button onClick={() => setChat(!chat)} aria-label="Chat asisten" className="h-20 w-20 overflow-hidden rounded-full bg-white shadow-lg ring-4 ring-pandan-700"><img src="/kelinci.png" alt="" className="h-full w-full object-cover" /></button>
+        <button onClick={() => setChat(!chat)} aria-label="Buka chat Tera-Asisten Ai" className="h-20 w-20 overflow-hidden rounded-full bg-white shadow-lg ring-4 ring-pandan-700"><img src="/kelinci.png" alt="" className="h-full w-full object-cover" /></button>
       </div>
       {chat && <OwnerChat onClose={() => setChat(false)} />}
       {modal && <TenantModal key={modal.id || 'new'} rooms={rooms} init={modal} onClose={() => setModal(null)} />}

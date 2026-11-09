@@ -22,6 +22,21 @@ await run(`create table if not exists waitlist (
 await run(`create table if not exists login_gagal (
   ip text not null, at timestamptz not null default now())`);
 await run('create index if not exists login_gagal_ip_at on login_gagal (ip, at)');
+// Rate limit endpoint publik (chat, waiting list, dsb).
+await run(`create table if not exists rate_hits (
+  bucket text not null, key text not null, at timestamptz not null default now())`);
+await run('create index if not exists rate_hits_lookup on rate_hits (bucket, key, at)');
+// Audit request yang diblokir (guard/rate limit/CAPTCHA) + penanda alert 429.
+await run(`create table if not exists security_events (
+  id bigserial primary key, kind text not null, ip text, path text, detail text,
+  created_at timestamptz not null default now())`);
+await run('create index if not exists security_events_lookup on security_events (kind, created_at)');
+// CAPTCHA waiting list: jawaban disimpan di server, token HMAC sekali pakai.
+await run(`create table if not exists waitlist_challenges (
+  nonce text primary key, answer int not null,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null, used_at timestamptz)`);
+await run('create index if not exists waitlist_challenges_expiry on waitlist_challenges (expires_at)');
 
 for (const r of ROOMS) {
   await run(

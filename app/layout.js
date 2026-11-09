@@ -1,6 +1,10 @@
 import './globals.css';
 import Leaves from '@/components/Leaves';
 
+// CSP nonce dibuat per request. Halaman statis tidak bisa menerima nonce,
+// jadi seluruh halaman dirender dinamis (dashboard sudah dinamis sejak awal).
+export const dynamic = 'force-dynamic';
+
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://pandanjogja.vercel.app';
 const TITLE = 'Pandan Jogja — Homestay, Villa & Kos di Yogyakarta';
 const DESC = 'Sewa harian, mingguan, dan bulanan di Yogyakarta. 7 kamar berperabot lengkap dengan dapur, teras, dan kebun pandan. Lihat kamar, cek ketersediaan, dan jadwalkan survei langsung di website.';

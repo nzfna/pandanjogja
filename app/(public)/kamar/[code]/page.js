@@ -1,10 +1,13 @@
 import { notFound } from 'next/navigation';
+import { headers } from 'next/headers';
 import { getRooms, getPublicOcc } from '@/lib/data';
 import { computeStatus, rp, todayWIB } from '@/lib/avail';
+import { jsonLdHtml } from '@/lib/sanitize';
 import RoomBooking from '@/components/RoomBooking';
 
 export async function generateMetadata({ params }) {
-  const code = String(params.code || '').toUpperCase();
+  const { code: rawCode } = await params;
+  const code = String(rawCode || '').toUpperCase();
   const rooms = await getRooms().catch(() => []);
   const room = rooms.find((r) => r.code === code);
   if (!room) return { title: 'Kamar tidak ditemukan' };
@@ -23,7 +26,9 @@ export async function generateMetadata({ params }) {
 }
 
 export default async function KamarPage({ params }) {
-  const code = params.code.toUpperCase();
+  const nonce = (await headers()).get('x-nonce') || undefined;
+  const { code: rawCode } = await params;
+  const code = String(rawCode || '').toUpperCase();
   const [rooms, occ] = await Promise.all([getRooms(), getPublicOcc()]);
   const room = rooms.find((r) => r.code === code);
   if (!room) notFound();
@@ -47,7 +52,7 @@ export default async function KamarPage({ params }) {
     },
   };
   return <>
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+    <script type="application/ld+json" nonce={nonce} dangerouslySetInnerHTML={{ __html: jsonLdHtml(jsonLd) }} />
     <RoomBooking room={room} status={computeStatus(code, occ, todayWIB())} wa={process.env.NEXT_PUBLIC_OWNER_WA || ''} />
   </>;
 }

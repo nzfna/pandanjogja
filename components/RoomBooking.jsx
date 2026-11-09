@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import VideoPreview from './VideoPreview';
 import RoomPhoto from './RoomPhoto';
@@ -79,11 +79,38 @@ export default function RoomBooking({ room, status, wa }) {
 function WaitForm({ code, onClose }) {
   const [f, setF] = useState({ name: '', origin: '', wa: '', website: '' });
   const [state, setState] = useState('');
-  async function submit(e) {
-    e.preventDefault(); setState('...');
-    const r = await fetch('/api/waitlist', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...f, room_code: code }) });
-    setState(r.ok ? 'ok' : (await r.json()).error);
+  const [ch, setCh] = useState(null);
+  const [answer, setAnswer] = useState('');
+  const [chErr, setChErr] = useState('');
+
+  async function loadChallenge() {
+    setCh(null); setAnswer(''); setChErr('');
+    try {
+      const r = await fetch('/api/waitlist/challenge', { cache: 'no-store' });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Verifikasi gagal dimuat.');
+      setCh(d);
+    } catch (e) {
+      setChErr(e.message || 'Verifikasi gagal dimuat.');
+    }
   }
+
+  useEffect(() => { loadChallenge(); }, []);
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!ch) return;
+    setState('...');
+    const r = await fetch('/api/waitlist', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...f, room_code: code, challenge: ch.token, answer }),
+    });
+    if (r.ok) { setState('ok'); return; }
+    setState((await r.json()).error);
+    loadChallenge(); // token sekali pakai: minta tantangan baru
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-pandan-900/50 p-4" role="dialog" aria-modal="true">
       <form onSubmit={submit} className="card w-full max-w-md space-y-3">
@@ -92,9 +119,15 @@ function WaitForm({ code, onClose }) {
           <input className="input" placeholder="Nama" required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
           <input className="input" placeholder="Asal (kota/instansi)" value={f.origin} onChange={(e) => setF({ ...f, origin: e.target.value })} />
           <input className="input" placeholder="Nomor WA yang bisa dihubungi" inputMode="tel" required value={f.wa} onChange={(e) => setF({ ...f, wa: e.target.value })} />
+          <label className="block text-sm font-medium">
+            Verifikasi keamanan
+            <input className="input mt-1" placeholder={ch ? ch.question : 'Memuat pertanyaan…'} inputMode="numeric" required value={answer} onChange={(e) => setAnswer(e.target.value)} disabled={!ch} />
+          </label>
+          <p className="text-xs text-pandan-700">Jawab pertanyaan di atas supaya kami tahu kamu benar-benar orang, bukan bot.</p>
+          {chErr && <p className="text-sm text-red-700">{chErr} <button type="button" className="underline" onClick={loadChallenge}>Coba lagi</button></p>}
           <input className="hidden" tabIndex={-1} autoComplete="off" value={f.website} onChange={(e) => setF({ ...f, website: e.target.value })} />
           {state && state !== '...' && <p className="text-sm text-red-700">{state}</p>}
-          <button className="btn w-full" disabled={state === '...'}>Kirim</button>
+          <button className="btn w-full" disabled={state === '...' || !ch}>{state === '...' ? 'Mengirim…' : 'Kirim'}</button>
         </>)}
         <button type="button" className="btn-soft w-full" onClick={onClose}>Tutup</button>
       </form>

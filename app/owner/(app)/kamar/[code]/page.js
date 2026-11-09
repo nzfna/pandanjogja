@@ -5,7 +5,8 @@ import { todayWIB } from '@/lib/avail';
 import RoomOwner from '@/components/RoomOwner';
 
 export default async function OwnerRoom({ params }) {
-  const code = params.code.toUpperCase();
+  const { code: rawCode } = await params;
+  const code = String(rawCode || '').toUpperCase();
   const rooms = await getRooms();
   const room = rooms.find((r) => r.code === code);
   if (!room) notFound();
